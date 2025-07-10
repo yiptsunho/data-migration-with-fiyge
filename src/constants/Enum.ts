@@ -52,7 +52,50 @@ enum FIYGEChartOfAccountID {
     OTHER_INCOME = "32",
 }
 
+enum FIYGEAddressType {
+    MAILING = "795",
+    SHIPPING = "796",
+    OTHER = "797",
+    OFFICE = "798",
+    HOME_RESIDENTIAL = "799",
+}
+
+enum FIYGEEmailAddressType {
+    PRIMARY = "801",
+    SECONDARY = "802",
+    ASSISTANT = "803",
+    OTHER = "804",
+    WORK = "805",
+    OTHER_2 = "806",
+}
+
+enum FIYGEPhoneNumberType {
+}
+
+enum FIYGEPeopleType {
+    CLIENT = "1",
+}
+
+enum FIYGEPeopleSubType {
+    B2C_DIRECT_CLIENT = "9",
+}
+
+enum FIYGECompanyType {
+    CLIENT = "1",
+    SUPPLIER = "2",
+    VENDOR = "3",
+    PARTNER = "4",
+    OTHER = "6",
+    INTERNAL = "10",
+}
+
 export {
     QuickBooksChartOfAccountType,
     FIYGEChartOfAccountID,
+    FIYGEAddressType,
+    FIYGEEmailAddressType,
+    FIYGEPhoneNumberType,
+    FIYGEPeopleType,
+    FIYGEPeopleSubType,
+    FIYGECompanyType,
 }

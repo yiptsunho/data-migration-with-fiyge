@@ -10,11 +10,19 @@ import {
     ExchangeTokenRequestType,
     MigrateDataRequestType,
     PaginateDataResponseType,
-    QuickBooksAccountDTO
+    QuickBooksAccountDTO, QuickBooksCompanyInfoDTO, QuickBooksCustomerDTO
 } from "../constants/Types";
 import axios, {AxiosError} from "axios";
 import tokenModel from "../models/TokenModel";
 import {QUICK_BOOKS_ACCOUNT_TYPE_MAP} from "../constants/Constant";
+import {
+    FIYGEAddressType,
+    FIYGECompanyType,
+    FIYGEEmailAddressType,
+    FIYGEPeopleSubType,
+    FIYGEPeopleType
+} from "../constants/Enum";
+import {bulkInsertIntoFiyge, getFIYGECountryList} from "../utils/Util";
 
 const QuickBooksService = {
     exchangeToken: async (req: Request<{}, {}, ExchangeTokenRequestType>) => {
@@ -115,29 +123,52 @@ const QuickBooksService = {
             const [
                 accountList,
                 fiygeAccountData,
-                // customerList,
+                customerList,
                 // supplierList,
                 // employeeList,
-                // journalEntryList
+                // journalEntryList,
+                fiygeCountryData,
+                companyInfo
             ] = await Promise.all([
                 getChartOfAccounts(url, oauthClient, token.realmId),
                 getChartOfAccountsFromFiyge(fiygeAccessToken),
-                // getCustomers(url, oauthClient, token.realmId),
+                getCustomers(url, oauthClient, token.realmId),
                 // getSuppliers(url, oauthClient, token.realmId),
                 // getEmployees(url, oauthClient, token.realmId),
                 // getJournalEntries(url, oauthClient, token.realmId),
+                getFIYGECountryList(fiygeAccessToken),
+                getCompanyInfo(url, oauthClient, token.realmId),
             ])
 
 
+            // console.log("fiygeCountryData?.paginate?.data?.length", fiygeCountryData?.paginate?.data?.length)
+            console.log("fiygeCountryData?.paginate?.data", fiygeCountryData?.paginate?.data?.[0])
+            console.log("companyInfo", companyInfo)
+            const fiygeCountryList = fiygeCountryData?.paginate?.data;
+            const clientCountryCode = companyInfo?.Country;
+            const clientCountry = clientCountryCode ? fiygeCountryList?.find(country => {
+                if (clientCountryCode.length === 2) {
+                    return clientCountryCode === country["countries.iso2"]
+                }
 
+                return clientCountryCode === country["countries.iso3"]
+            }) : undefined;
+            const clientCountryId = clientCountry?.["countries.id"] as string | undefined;
+            // console.log("clientCountryCode", clientCountryCode)
+            // console.log("clientCountry", clientCountry)
+            // const
+            // console.dir(fiygeCountryData, { depth: null })
             // contains the business logic of all data migration
-            console.log("Start migrating chart of accounts")
-            await migrateChartOfAccounts(accountList, fiygeAccountData, fiygeAccessToken);
-            console.log("End migrating chart of accounts")
+            // console.log("Start migrating chart of accounts")
+            // await migrateChartOfAccounts(accountList, fiygeAccountData, fiygeAccessToken);
+            // console.log("End migrating chart of accounts")
 
-            // console.log("Start migrating customers")
-            // const customersResponse = await getCustomers(url, oauthClient, token.realmId);
-            // console.log("End migrating customers", customersResponse)
+            if (clientCountryId) {
+                console.log("Start migrating customers")
+                await migrateCustomers(clientCountryId, userId, fiygeCountryList, customerList, fiygeAccessToken);
+                // const customersResponse = await getCustomers(url, oauthClient, token.realmId);
+                console.log("End migrating customers")
+            }
             //
             // console.log("Start migrating suppliers")
             // const suppliersResponse = await getSuppliers(url, oauthClient, token.realmId);
@@ -174,9 +205,45 @@ const getChartOfAccounts = async (url: string, oauthClient: OAuthClient, realmId
     return result;
 }
 
+const getCustomers = async (url: string, oauthClient: OAuthClient, realmId: number) => {
+    const query = encodeURIComponent("select * from Customer")
+    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
+
+    const result: QuickBooksCustomerDTO[] | undefined = response?.json?.QueryResponse.Customer;
+    // console.log("getCustomers result: ", result);
+    return result;
+}
+
+const getSuppliers = async (url: string, oauthClient: OAuthClient, realmId: number) => {
+    const query = "select%20%2A%20from%20Vendor"
+    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
+
+    const result = response?.json?.QueryResponse.Vendor;
+    // console.log("getSuppliers result: ", result);
+    return result;
+}
+
+const getEmployees = async (url: string, oauthClient: OAuthClient, realmId: number) => {
+    const query = "select%20%2A%20from%20Employee"
+    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
+
+    const result = response?.json?.QueryResponse.Employee;
+    // console.log("getEmployees result: ", result);
+    return result;
+}
+
+const getJournalEntries = async (url: string, oauthClient: OAuthClient, realmId: number) => {
+    const query = "select%20%2A%20from%20JournalEntry"
+    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
+
+    const result = response?.json?.QueryResponse.JournalEntry;
+    // console.log("getJournalEntries result: ", result);
+    return result;
+}
+
 // get chart of accounts from FIYGE
 const getChartOfAccountsFromFiyge = async (accessToken: string) => {
-    const response = await axios.get<PaginateDataResponseType>("https://api.accounting.fiyge.com/accounting/accounts/index.json?track_open=0", {
+    const response = await axios.get<PaginateDataResponseType>(process.env.FIYGE_SERVER_URL + "/accounting/accounts/index.json?track_open=0", {
         headers: {
             Authorization: `Bearer ${accessToken}`,
         }
@@ -252,47 +319,36 @@ const migrateChartOfAccounts = async (quickBooksAccountList: QuickBooksAccountDT
     }
 }
 
-const getCustomers = async (url: string, oauthClient: OAuthClient, realmId: number) => {
-    const query = "select%20%2A%20from%20Customer"
-    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
-
-    const result = response?.json?.QueryResponse.Customer;
-    console.log("getCustomers result: ", result);
-    return result;
-}
-
-const getSuppliers = async (url: string, oauthClient: OAuthClient, realmId: number) => {
-    const query = "select%20%2A%20from%20Vendor"
-    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
-
-    const result = response?.json?.QueryResponse.Vendor;
-    console.log("getSuppliers result: ", result);
-    return result;
-}
-
-const getEmployees = async (url: string, oauthClient: OAuthClient, realmId: number) => {
-    const query = "select%20%2A%20from%20Employee"
-    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
-
-    const result = response?.json?.QueryResponse.Employee;
-    console.log("getEmployees result: ", result);
-    return result;
-}
-
-const getJournalEntries = async (url: string, oauthClient: OAuthClient, realmId: number) => {
-    const query = "select%20%2A%20from%20JournalEntry"
-    const response = await oauthClient.makeApiCall({ url: url + 'v3/company/' + realmId +'/query?query=' + query})
-
-    const result = response?.json?.QueryResponse.JournalEntry;
-    console.log("getJournalEntries result: ", result);
-    return result;
-}
-
-const transformChartOfAccounts = (data: QuickBooksAccountDTO[] | undefined, quickBooksToFiygeAccountIdMap: Map<string, unknown>) => {
-    if (!data) {
-        return {};
+const migrateCustomers = async (clientCountryId: string, userId: string, fiygeCountryList: Record<string,unknown>[] | undefined, customerList: QuickBooksCustomerDTO[] | undefined, fiygeAccessToken: string) => {
+    if (customerList === undefined) {
+        throw new AppErr(
+            StatusCodes.INTERNAL_SERVER_ERROR,
+            "customerList === undefined",
+            StatusCodes.INTERNAL_SERVER_ERROR,
+        )
     }
 
+    const peopleList = customerList.filter(customer => isPeople(customer))
+    const companyList = customerList.filter(customer => !isPeople(customer))
+
+
+    const peopleData = transformPeoples(clientCountryId, userId, fiygeCountryList, peopleList)
+    const companyData = transformCompanies(clientCountryId, userId, fiygeCountryList, companyList)
+    // console.log("peopleList", peopleList)
+    console.log("peopleData", peopleData)
+    // console.log("companyList", companyList)
+    console.log("companyData", companyData)
+    const peopleResponse = await bulkInsertIntoFiyge(fiygeAccessToken, "/crm/people/add_many.json", peopleData)
+    const companyResponse = await bulkInsertIntoFiyge(fiygeAccessToken, "/crm/companies/add_many.json", companyData)
+    // console.log("peopleResponse")
+    // console.dir(peopleResponse, { depth: null })
+    // console.log("companyResponse")
+    // console.dir(companyResponse, { depth: null })
+    console.log("peopleResponse", peopleResponse)
+    console.log("companyResponse", companyResponse)
+}
+
+const transformChartOfAccounts = (data: QuickBooksAccountDTO[], quickBooksToFiygeAccountIdMap: Map<string, unknown>) => {
     // const transformedData = new Map<string, unknown>();
     // transformedData.set("data[normalized]", "1")
     const transformedData: Record<string, any> = {
@@ -336,16 +392,271 @@ const transformChartOfAccounts = (data: QuickBooksAccountDTO[] | undefined, quic
     return transformedData;
 }
 
-const bulkInsertIntoFiyge = async (accessToken: string, endPoint: string, data: Record<string, any>) => {
-    const fiygeUrl = process.env.FIYGE_SERVER_URL + endPoint;
-    const formData = new URLSearchParams(data);
+const transformPeoples = (countryId: string, userId: string, fiygeCountryList: Record<string,unknown>[] | undefined, data: QuickBooksCustomerDTO[]) => {
+    const transformedData: Record<string, any> = {
+        'data[normalized]': '1',
+    };
 
-    return await axios.post(fiygeUrl, formData, {
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Authorization: `Bearer ${accessToken}`,
-        },
+    data.forEach((people, index) => {
+        const {
+            Title,
+            GivenName,
+            MiddleName,
+            FamilyName,
+            Suffix,
+            PrimaryEmailAddr,
+            Fax,
+            CurrencyRef,
+            Mobile,
+            PrimaryPhone,
+            AlternatePhone,
+            ParentRef,
+            Notes,
+            WebAddr,
+            ShipAddr,
+            BillAddr,
+            PrimaryTaxIdentifier,
+        } = people;
+        const prefix = `data[people][${index}]`;
+
+        transformedData[`${prefix}[people_type_id]`] = FIYGEPeopleType.CLIENT;
+        transformedData[`${prefix}[people_sub_type_id]`] = FIYGEPeopleSubType.B2C_DIRECT_CLIENT;
+        transformedData[`${prefix}[owned_by]`] = userId;
+        transformedData[`${prefix}[owned_by_model]`] = "owned_by_user";
+
+        if (Title !== undefined) {
+            transformedData[`${prefix}[__title_id]`] = Title;
+        }
+
+        if (GivenName !== undefined || MiddleName !== undefined) {
+            const name = [GivenName, MiddleName].join(" ");
+            transformedData[`${prefix}[first_name]`] = name.trim();
+        }
+
+        if (FamilyName !== undefined) {
+            transformedData[`${prefix}[last_name]`] = FamilyName;
+        }
+
+        if (PrimaryEmailAddr?.Address !== undefined) {
+            transformedData[`${prefix}[email_addresses][0][type]`] = FIYGEEmailAddressType.PRIMARY;
+            transformedData[`${prefix}[email_addresses][0][email]`] = PrimaryEmailAddr?.Address;
+        }
+
+        if (PrimaryPhone?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][0][type]`] = FIYGEEmailAddressType.WORK;
+            transformedData[`${prefix}[phone_numbers][0][number]`] = PrimaryPhone?.FreeFormNumber;
+        }
+
+        if (Mobile?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][1][type]`] = "808";
+            transformedData[`${prefix}[phone_numbers][1][number]`] = Mobile?.FreeFormNumber;
+        }
+
+        if (AlternatePhone?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][2][type]`] = "807";
+            transformedData[`${prefix}[phone_numbers][2][number]`] = AlternatePhone?.FreeFormNumber;
+        }
+
+        if (Fax?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][3][type]`] = "810";
+            transformedData[`${prefix}[phone_numbers][3][number]`] = Fax?.FreeFormNumber;
+        }
+
+        if (Notes !== undefined) {
+            transformedData[`${prefix}[client_notes]`] = Notes;
+        }
+
+        if (ShipAddr !== undefined) {
+            transformedData[`${prefix}[addresses][0][type]`] = FIYGEAddressType.SHIPPING;
+            transformedData[`${prefix}[addresses][0][address_line_1]`] = ShipAddr?.Line1;
+            transformedData[`${prefix}[addresses][0][city]`] = ShipAddr?.City;
+            transformedData[`${prefix}[addresses][0][zip]`] = ShipAddr?.PostalCode;
+
+            if (ShipAddr?.Line2 || ShipAddr?.Line3 || ShipAddr?.Line4 || ShipAddr?.Line5) {
+                const addressLine2 = [ShipAddr?.Line2, ShipAddr?.Line3, ShipAddr?.Line4, ShipAddr?.Line5].join(" ")
+                transformedData[`${prefix}[addresses][0][address_line_2]`] = addressLine2.trim();
+            }
+
+            if (ShipAddr?.Lat !== undefined && ShipAddr?.Lat !== "INVALID") {
+                transformedData[`${prefix}[addresses][0][latitude]`] = ShipAddr?.Lat;
+            }
+
+            if (ShipAddr?.Long  !== undefined && ShipAddr?.Long !== "INVALID") {
+                transformedData[`${prefix}[addresses][0][latitude]`] = ShipAddr?.Long;
+            }
+
+            if (ShipAddr?.Country !== undefined) {
+                const country = findCountry(fiygeCountryList, ShipAddr?.Country)
+
+                if (country !== undefined) {
+                    transformedData[`${prefix}[addresses][0][country_id]`] = country["countries.id"];
+                }
+            } else {
+                transformedData[`${prefix}[addresses][0][country_id]`] = countryId;
+            }
+        }
+
+        if (BillAddr !== undefined) {
+            transformedData[`${prefix}[addresses][1][type]`] = FIYGEAddressType.OTHER;
+            transformedData[`${prefix}[addresses][1][address_line_1]`] = BillAddr?.Line1;
+            transformedData[`${prefix}[addresses][1][city]`] = BillAddr?.City;
+            transformedData[`${prefix}[addresses][1][zip]`] = BillAddr?.PostalCode;
+
+            if (BillAddr?.Line2 || BillAddr?.Line3 || BillAddr?.Line4 || BillAddr?.Line5) {
+                const addressLine2 = [BillAddr?.Line2, BillAddr?.Line3, BillAddr?.Line4, BillAddr?.Line5].join(" ")
+                transformedData[`${prefix}[addresses][1][address_line_2]`] = addressLine2.trim();
+            }
+
+            if (BillAddr?.Lat !== undefined && BillAddr?.Lat !== "INVALID") {
+                transformedData[`${prefix}[addresses][1][latitude]`] = BillAddr?.Lat;
+            }
+
+            if (BillAddr?.Long  !== undefined && BillAddr?.Long !== "INVALID") {
+                transformedData[`${prefix}[addresses][1][latitude]`] = BillAddr?.Long;
+            }
+
+            if (BillAddr?.Country !== undefined) {
+                const country = findCountry(fiygeCountryList, BillAddr?.Country)
+
+                if (country !== undefined) {
+                    transformedData[`${prefix}[addresses][1][country_id]`] = country["countries.id"];
+                }
+            } else {
+                transformedData[`${prefix}[addresses][1][country_id]`] = countryId;
+            }
+        }
     });
+
+    return transformedData;
+}
+
+const transformCompanies = (countryId: string, userId: string, fiygeCountryList: Record<string,unknown>[] | undefined, data: QuickBooksCustomerDTO[]) => {
+    const transformedData: Record<string, any> = {
+        'data[normalized]': '1',
+    };
+
+    data.forEach((people, index) => {
+        const {
+            Title,
+            DisplayName,
+            GivenName,
+            MiddleName,
+            FamilyName,
+            Suffix,
+            PrimaryEmailAddr,
+            Fax,
+            CurrencyRef,
+            Mobile,
+            PrimaryPhone,
+            AlternatePhone,
+            ParentRef,
+            Notes,
+            WebAddr,
+            ShipAddr,
+            BillAddr,
+            PrimaryTaxIdentifier,
+        } = people;
+        const prefix = `data[companies][${index}]`;
+
+        transformedData[`${prefix}[company_type_id]`] = FIYGECompanyType.CLIENT;
+        transformedData[`${prefix}[owned_by]`] = userId;
+        transformedData[`${prefix}[owned_by_model]`] = "owned_by_user";
+
+        if (DisplayName !== undefined) {
+            transformedData[`${prefix}[name]`] = DisplayName;
+        }
+
+        if (PrimaryEmailAddr?.Address !== undefined) {
+            transformedData[`${prefix}[email_addresses][0][type]`] = FIYGEEmailAddressType.PRIMARY;
+            transformedData[`${prefix}[email_addresses][0][email]`] = PrimaryEmailAddr?.Address;
+        }
+
+        if (PrimaryPhone?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][0][type]`] = FIYGEEmailAddressType.WORK;
+            transformedData[`${prefix}[phone_numbers][0][number]`] = PrimaryPhone?.FreeFormNumber;
+        }
+
+        if (Mobile?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][1][type]`] = "808";
+            transformedData[`${prefix}[phone_numbers][1][number]`] = Mobile?.FreeFormNumber;
+        }
+
+        if (AlternatePhone?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][2][type]`] = "807";
+            transformedData[`${prefix}[phone_numbers][2][number]`] = AlternatePhone?.FreeFormNumber;
+        }
+
+        if (Fax?.FreeFormNumber !== undefined) {
+            transformedData[`${prefix}[phone_numbers][3][type]`] = "810";
+            transformedData[`${prefix}[phone_numbers][3][number]`] = Fax?.FreeFormNumber;
+        }
+
+        if (Notes !== undefined) {
+            transformedData[`${prefix}[description]`] = Notes;
+        }
+
+        if (ShipAddr !== undefined) {
+            transformedData[`${prefix}[addresses][0][type]`] = FIYGEAddressType.SHIPPING;
+            transformedData[`${prefix}[addresses][0][address_line_1]`] = ShipAddr?.Line1;
+            transformedData[`${prefix}[addresses][0][city]`] = ShipAddr?.City;
+            transformedData[`${prefix}[addresses][0][zip]`] = ShipAddr?.PostalCode;
+
+            if (ShipAddr?.Line2 || ShipAddr?.Line3 || ShipAddr?.Line4 || ShipAddr?.Line5) {
+                const addressLine2 = [ShipAddr?.Line2, ShipAddr?.Line3, ShipAddr?.Line4, ShipAddr?.Line5].join(" ")
+                transformedData[`${prefix}[addresses][0][address_line_2]`] = addressLine2.trim();
+            }
+
+            if (ShipAddr?.Lat !== undefined && ShipAddr?.Lat !== "INVALID") {
+                transformedData[`${prefix}[addresses][0][latitude]`] = ShipAddr?.Lat;
+            }
+
+            if (ShipAddr?.Long  !== undefined && ShipAddr?.Long !== "INVALID") {
+                transformedData[`${prefix}[addresses][0][latitude]`] = ShipAddr?.Long;
+            }
+
+            if (ShipAddr?.Country !== undefined) {
+                const country = findCountry(fiygeCountryList, ShipAddr?.Country)
+
+                if (country !== undefined) {
+                    transformedData[`${prefix}[addresses][0][__country_id]`] = country["countries.id"];
+                }
+            } else {
+                transformedData[`${prefix}[addresses][0][country_id]`] = countryId;
+            }
+        }
+
+        if (BillAddr !== undefined) {
+            transformedData[`${prefix}[addresses][1][type]`] = FIYGEAddressType.OTHER;
+            transformedData[`${prefix}[addresses][1][address_line_1]`] = BillAddr?.Line1;
+            transformedData[`${prefix}[addresses][1][city]`] = BillAddr?.City;
+            transformedData[`${prefix}[addresses][1][zip]`] = BillAddr?.PostalCode;
+
+            if (BillAddr?.Line2 || BillAddr?.Line3 || BillAddr?.Line4 || BillAddr?.Line5) {
+                const addressLine2 = [BillAddr?.Line2, BillAddr?.Line3, BillAddr?.Line4, BillAddr?.Line5].join(" ")
+                transformedData[`${prefix}[addresses][1][address_line_2]`] = addressLine2.trim();
+            }
+
+            if (BillAddr?.Lat !== undefined && BillAddr?.Lat !== "INVALID") {
+                transformedData[`${prefix}[addresses][1][latitude]`] = BillAddr?.Lat;
+            }
+
+            if (BillAddr?.Long  !== undefined && BillAddr?.Long !== "INVALID") {
+                transformedData[`${prefix}[addresses][1][latitude]`] = BillAddr?.Long;
+            }
+
+            if (BillAddr?.Country !== undefined) {
+                const country = findCountry(fiygeCountryList, BillAddr?.Country)
+
+                if (country !== undefined) {
+                    transformedData[`${prefix}[addresses][1][__country_id]`] = country["countries.id"];
+                }
+            } else {
+                transformedData[`${prefix}[addresses][1][country_id]`] = countryId;
+            }
+        }
+    });
+
+    return transformedData;
 }
 
 // Compute account levels (0 for top-level, 1 for children of level 0, etc.)
@@ -403,6 +714,41 @@ function computeAccountLevels(accounts: QuickBooksAccountDTO[]): Map<string, num
     });
 
     return levels;
+}
+
+const isPeople = (customer: QuickBooksCustomerDTO) => {
+    const {Title, GivenName, MiddleName, FamilyName, Suffix, DisplayName, CompanyName} = customer;
+    const peopleName = [Title, GivenName, MiddleName, FamilyName, Suffix].join(" ").replace("  ", " ").trim()
+    // console.log("peopleName", peopleName)
+    if (DisplayName === peopleName) {
+        return true;
+    }
+
+    // if (DisplayName === CompanyName) {
+    //     return false;
+    // }
+
+    return false;
+}
+
+const getCompanyInfo = async (url: string, oauthClient: OAuthClient, realmId: number) => {
+    // const query = encodeURIComponent("select * from CompanyInfo")
+    const response = await oauthClient.makeApiCall({url: url + 'v3/company/' + realmId + '/companyinfo/' + realmId})
+
+    console.log("json", response?.json)
+    const result: QuickBooksCompanyInfoDTO | undefined = response?.json?.CompanyInfo;
+    // console.log("getCustomers result: ", result);
+    return result;
+}
+
+const findCountry = (fiygeCountryList: Record<string, unknown>[] | undefined, freeText: string) => {
+    return fiygeCountryList?.find(country => {
+        const countryName = country?.["countries.country_name"] as string | undefined;
+        const iso3 = country?.["countries.iso3"] as string | undefined;
+        const iso2 = country?.["countries.iso2"] as string | undefined;
+
+        return countryName?.toLowerCase() === freeText.toLowerCase() || iso3?.toLowerCase() === freeText.toLowerCase() || iso2?.toLowerCase() === freeText.toLowerCase()
+    })
 }
 
 export default QuickBooksService;

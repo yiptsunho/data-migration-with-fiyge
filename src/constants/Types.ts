@@ -43,6 +43,53 @@ interface QuickBooksAccountDTO {
     SubAccount: boolean;
 }
 
+interface QuickBooksTelephoneNumber {
+    FreeFormNumber?: string;
+}
+
+interface QuickBooksAddress {
+    Id: string;
+    PostalCode?: string;
+    City?: string;
+    Country?: string;
+    Line5?: string;
+    Line4?: string;
+    Line3?: string;
+    Line2?: string;
+    Line1?: string;
+    Lat?: string;
+    Long?: string;
+    CountrySubDivisionCode?: string;
+}
+
+interface QuickBooksEmailAddress {
+    Address?: string;
+}
+
+// https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/customer#the-customer-object
+interface QuickBooksCustomerDTO {
+    Id: string;
+    DisplayName?: string;
+    Title?: string;
+    GivenName?: string;
+    MiddleName?: string;
+    FamilyName?: string;
+    Suffix?: string;
+    PrimaryEmailAddr?: QuickBooksEmailAddress;
+    Fax?: QuickBooksTelephoneNumber;
+    CurrencyRef?: { value: string, name: string };
+    Mobile?: QuickBooksTelephoneNumber;
+    PrimaryPhone?: QuickBooksTelephoneNumber;
+    AlternatePhone?: QuickBooksTelephoneNumber;
+    ParentRef?: { value: string, name: string };
+    Notes?: string;
+    WebAddr?: { URI?: string };
+    ShipAddr?: QuickBooksAddress;
+    BillAddr?: QuickBooksAddress;
+    PrimaryTaxIdentifier?: string;
+    CompanyName?: string;
+}
+
 interface PaginateDataResponseType {
     paginate?: {
         data?: Record<string, unknown>[];
@@ -51,10 +98,16 @@ interface PaginateDataResponseType {
     }
 }
 
+interface QuickBooksCompanyInfoDTO {
+    Country?: string;
+}
+
 export type {
     ExchangeTokenRequestType,
     MigrateDataRequestType,
     TokenSchema,
     QuickBooksAccountDTO,
-    PaginateDataResponseType
+    QuickBooksCustomerDTO,
+    PaginateDataResponseType,
+    QuickBooksCompanyInfoDTO,
 }
