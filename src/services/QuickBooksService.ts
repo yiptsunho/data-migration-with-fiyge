@@ -20,7 +20,7 @@ import {
     FIYGECompanyType,
     FIYGEEmailAddressType,
     FIYGEPeopleSubType,
-    FIYGEPeopleType
+    FIYGEPeopleType, FIYGEPhoneNumberType
 } from "../constants/Enum";
 import {bulkInsertIntoFiyge, getFIYGECountryList} from "../utils/Util";
 
@@ -443,22 +443,23 @@ const transformPeoples = (countryId: string, userId: string, fiygeCountryList: R
         }
 
         if (PrimaryPhone?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][0][type]`] = FIYGEEmailAddressType.WORK;
+            // TODO: add phone type "Primary" in FIYGE
+            transformedData[`${prefix}[phone_numbers][0][type]`] = FIYGEPhoneNumberType.OFFICE;
             transformedData[`${prefix}[phone_numbers][0][number]`] = PrimaryPhone?.FreeFormNumber;
         }
 
         if (Mobile?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][1][type]`] = "808";
+            transformedData[`${prefix}[phone_numbers][1][type]`] = FIYGEPhoneNumberType.MOBILE;
             transformedData[`${prefix}[phone_numbers][1][number]`] = Mobile?.FreeFormNumber;
         }
 
         if (AlternatePhone?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][2][type]`] = "807";
+            transformedData[`${prefix}[phone_numbers][2][type]`] = FIYGEPhoneNumberType.OTHER;
             transformedData[`${prefix}[phone_numbers][2][number]`] = AlternatePhone?.FreeFormNumber;
         }
 
         if (Fax?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][3][type]`] = "810";
+            transformedData[`${prefix}[phone_numbers][3][type]`] = FIYGEPhoneNumberType.FAX;
             transformedData[`${prefix}[phone_numbers][3][number]`] = Fax?.FreeFormNumber;
         }
 
@@ -497,6 +498,7 @@ const transformPeoples = (countryId: string, userId: string, fiygeCountryList: R
         }
 
         if (BillAddr !== undefined) {
+            // TODO: add address type "Billing" in FIYGE
             transformedData[`${prefix}[addresses][1][type]`] = FIYGEAddressType.OTHER;
             transformedData[`${prefix}[addresses][1][address_line_1]`] = BillAddr?.Line1;
             transformedData[`${prefix}[addresses][1][city]`] = BillAddr?.City;
@@ -572,22 +574,23 @@ const transformCompanies = (countryId: string, userId: string, fiygeCountryList:
         }
 
         if (PrimaryPhone?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][0][type]`] = FIYGEEmailAddressType.WORK;
+            // TODO: add phone type "Primary" in FIYGE
+            transformedData[`${prefix}[phone_numbers][0][type]`] = FIYGEPhoneNumberType.OFFICE;
             transformedData[`${prefix}[phone_numbers][0][number]`] = PrimaryPhone?.FreeFormNumber;
         }
 
         if (Mobile?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][1][type]`] = "808";
+            transformedData[`${prefix}[phone_numbers][1][type]`] = FIYGEPhoneNumberType.MOBILE;
             transformedData[`${prefix}[phone_numbers][1][number]`] = Mobile?.FreeFormNumber;
         }
 
         if (AlternatePhone?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][2][type]`] = "807";
+            transformedData[`${prefix}[phone_numbers][2][type]`] = FIYGEPhoneNumberType.OFFICE;
             transformedData[`${prefix}[phone_numbers][2][number]`] = AlternatePhone?.FreeFormNumber;
         }
 
         if (Fax?.FreeFormNumber !== undefined) {
-            transformedData[`${prefix}[phone_numbers][3][type]`] = "810";
+            transformedData[`${prefix}[phone_numbers][3][type]`] = FIYGEPhoneNumberType.OTHER;
             transformedData[`${prefix}[phone_numbers][3][number]`] = Fax?.FreeFormNumber;
         }
 
@@ -626,6 +629,7 @@ const transformCompanies = (countryId: string, userId: string, fiygeCountryList:
         }
 
         if (BillAddr !== undefined) {
+            // TODO: add address type "Billing" in FIYGE
             transformedData[`${prefix}[addresses][1][type]`] = FIYGEAddressType.OTHER;
             transformedData[`${prefix}[addresses][1][address_line_1]`] = BillAddr?.Line1;
             transformedData[`${prefix}[addresses][1][city]`] = BillAddr?.City;

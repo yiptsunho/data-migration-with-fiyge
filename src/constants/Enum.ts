@@ -70,6 +70,15 @@ enum FIYGEEmailAddressType {
 }
 
 enum FIYGEPhoneNumberType {
+    OFFICE = "805",
+    HOME = "806",
+    OTHER = "807",
+    MOBILE = "808",
+    ASSISTANT = "809",
+    FAX = "810",
+    SKYPE = "811",
+    WECHAT = "812",
+    WHATSAPP = "813",
 }
 
 enum FIYGEPeopleType {
